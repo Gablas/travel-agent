@@ -29,46 +29,77 @@ This is a React Native Expo app with the following key architectural components:
 
 ### Core Stack
 - **Expo Router**: File-based routing system with typed routes enabled
-- **React Native**: Cross-platform mobile development
-- **Convex**: Real-time backend with database and API
-- **AI SDK**: Integration with Google Gemini AI with streaming capabilities
-- **TypeScript**: Full type safety throughout the application
+- **React Native**: Cross-platform mobile development (iOS, Android, Web)
+- **Convex**: Real-time backend-as-a-service with document database
+- **AI SDK**: Integration with OpenRouter and Google Gemini 2.5 Flash model
+- **React Native Paper**: Material Design UI component library
+- **TypeScript**: Full type safety with auto-generated types from Convex schema
 
 ### Backend Architecture
-- **Convex Database**: Real-time database with automatic code generation
+- **Convex Database**: Real-time document database with automatic TypeScript generation
 - **Convex Functions**: Server-side mutations and queries in `convex/` directory
-- **AI Integration**: Google Gemini 2.5 Flash model with search grounding and thinking capabilities
-- **Tool Integration**: AI can execute server-side functions via tools
+- **AI Integration**: OpenRouter with Google Gemini 2.5 Flash, high-effort reasoning mode
+- **Web Search**: Exa API integration for mandatory travel research
+- **Tool Integration**: AI can execute Convex functions via structured tool calls
 
 ### Frontend Architecture
-- **File-based Routing**: Routes defined in `app/` directory structure
-- **Tab Navigation**: Bottom tab layout in `app/(tabs)/`
+- **File-based Routing**: Single-page app with main index route
+- **Global State**: ChatContext for chat state, Convex for database state
 - **Real-time Data**: Convex queries automatically update UI when data changes
 - **AI Chat Interface**: Streaming chat with tool invocations and reasoning display
+- **Component Architecture**: Reusable chat, trip, and message components
 
 ### Key Files and Directories
-- `app/api/chat+api.ts` - AI chat API endpoint with tool integration
-- `app/(tabs)/index.tsx` - Main chat interface and destination management
-- `convex/schema.ts` - Database schema definitions
-- `convex/destinations.ts` - Server-side functions for destination management
-- `app/_layout.tsx` - Root layout with providers (Theme, Convex)
+- `app/api/chat+api.ts` - AI chat API endpoint with tool integration and streaming
+- `app/index.tsx` - Main application entry point with chat interface
+- `app/_layout.tsx` - Root layout with providers (Convex, Theme)
+- `convex/schema.ts` - Database schema definitions for trips, days, and entries
+- `convex/trips.ts` - Advanced trip functions with comprehensive CRUD operations
+- `convex/tripsSimple.ts` - Simple trip functions for basic operations
+- `convex/days.ts` - Day-specific functions for trip itinerary management
+- `convex/entries.ts` - Entry functions for individual trip items
+- `contexts/ChatContext.tsx` - Global chat state management
+- `components/ChatOverlay.tsx` - Chat interface overlay component
+- `components/TripsShowcase.tsx` - Trip listing and management
+- `components/TypingIndicator.tsx` - Chat typing indicator component
+- `hooks/useKeyboardAvoidance.ts` - Keyboard handling for mobile
+- `types/index.ts` - TypeScript type definitions
 - `utils.ts` - Utility functions including API URL generation
 - `polyfills.js` - Polyfills for React Native compatibility
 
 ### Environment Setup
-- Requires `EXPO_PUBLIC_CONVEX_URL` environment variable
-- Convex client configured with real-time capabilities
-- AI SDK configured for streaming responses
+- `EXPO_PUBLIC_CONVEX_URL` - Convex backend URL for database connection
+- `OPENROUTER_API_KEY` - OpenRouter API key for AI model access
+- `EXA_API_KEY` - Exa API key for web search functionality
+- `HELICONE_API_KEY` - Helicone API key for monitoring and analytics
 
 ### Data Flow
-1. User interacts with chat interface
-2. Messages sent to `/api/chat` endpoint
-3. AI processes with access to Convex database via tools
-4. Real-time updates propagate to UI via Convex queries
-5. Tool invocations create/modify destinations in database
+1. User interacts with chat interface (ChatOverlay component)
+2. Messages sent to `/api/chat` endpoint with streaming enabled
+3. AI processes with mandatory web search using Exa API
+4. AI executes Convex functions via structured tool calls
+5. Real-time updates propagate to UI via Convex queries
+6. Tool invocations create/modify trips in database with full nested structure
+
+### Trip Data Architecture
+- **Single Document Pattern**: All trip data stored in one document for atomic updates
+- **Nested Structure**: Days contain visits and transportation, visits contain places
+- **Mandatory Google Maps**: All places require Google Maps URLs for integration
+- **Rich Metadata**: Places include ratings, prices, opening hours, contact info
+- **Status Tracking**: Trips have planning, active, and completed states
+
+### AI System Architecture
+- **High-effort Reasoning**: AI uses up to 50 reasoning steps for complex planning
+- **Mandatory Web Search**: All travel recommendations require web research first
+- **Tool Integration**: AI can create, read, update, and delete trips via Convex functions
+- **Streaming Responses**: Real-time text generation with tool call transparency
+- **Error Recovery**: Automatic tool call repair and retry mechanisms
 
 ### Development Notes
 - Uses `expo/fetch` polyfill for AI SDK compatibility
-- Convex generates TypeScript types automatically
+- Convex generates TypeScript types automatically in `_generated/` directory
 - AI responses include reasoning, tool calls, and text parts
 - Real-time database updates without manual refresh
+- Components use React Native Paper and native React Native styling
+- iOS platform support with native project configuration
+- Keyboard avoidance handling for mobile chat interface

@@ -1,72 +1,88 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, Dimensions } from 'react-native';
-import { TripCard } from './TripCard';
-import { Colors } from '@/constants/Colors';
 import type { Id } from '@/convex/_generated/dataModel';
+import type { Trip } from '@/types';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text } from 'react-native-paper';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 interface TripsShowcaseProps {
-  trips: {
-    _id: Id<"trips">;
-    name: string;
-    description?: string;
-    startDate?: string;
-    endDate?: string;
-    status: string;
-    budget?: number;
-    travelers?: number;
-  }[] | undefined;
+  trips: Trip[] | undefined;
   onTripPress: (tripId: Id<"trips">) => void;
 }
 
-const { width } = Dimensions.get('window');
-
 export function TripsShowcase({ trips, onTripPress }: TripsShowcaseProps) {
-  if (!trips || trips.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyIcon}>🌍</Text>
-          <Text style={styles.emptyTitle}>No trips yet!</Text>
-          <Text style={styles.emptySubtitle}>
-            Start planning your dream vacation by chatting with our AI assistant below
-          </Text>
-          <View style={styles.emptyFeatures}>
-            <Text style={styles.emptyFeature}>✈️ Create custom itineraries</Text>
-            <Text style={styles.emptyFeature}>🏨 Find the best accommodations</Text>
-            <Text style={styles.emptyFeature}>🗺️ Discover hidden gems</Text>
-            <Text style={styles.emptyFeature}>💰 Stay within your budget</Text>
-          </View>
-        </View>
-      </View>
-    );
-  }
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'planning': return '#f59e0b';
+      case 'active': return '#10b981';
+      case 'completed': return '#3b82f6';
+      default: return '#6b7280';
+    }
+  };
 
-  const isWideScreen = width > 768;
+  const getCategoryIcon = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'planning': return 'event';
+      case 'active': return 'flight';
+      case 'completed': return 'check-circle';
+      default: return 'place';
+    }
+  };
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Your Trips</Text>
-        <Text style={styles.subtitle}>
-          {trips.length} trip{trips.length === 1 ? '' : 's'} • Tap to view details
+        <View style={styles.headerSpacer} />
+        <Text variant="headlineSmall" style={styles.headerTitle}>
+          Trips
         </Text>
+        <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView
-        horizontal={!isWideScreen}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.scrollContainer,
-          isWideScreen && styles.gridContainer
-        ]}
-      >
-        {trips.map((trip) => (
-          <TripCard
-            key={trip._id}
-            trip={trip}
-            onPress={() => onTripPress(trip._id)}
-          />
-        ))}
+      {/* Content */}
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <View style={styles.content}>
+          {!trips || trips.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text variant="headlineSmall" style={styles.emptyTitle}>
+                No trips yet
+              </Text>
+              <Text variant="bodyMedium" style={styles.emptyDescription}>
+                Start planning your next adventure! Chat with our AI assistant to create your first trip.
+              </Text>
+            </View>
+          ) : (
+            trips.map((trip) => (
+              <TouchableOpacity
+                key={trip._id}
+                style={styles.tripItem}
+                onPress={() => onTripPress(trip._id)}
+              >
+                <View style={styles.iconContainer}>
+                  <Icon
+                    name={getCategoryIcon(trip.status)}
+                    size={24}
+                    color="#6b7280"
+                  />
+                </View>
+                <View style={styles.tripContent}>
+                  <View style={styles.tripHeader}>
+                    <Text variant="titleMedium" style={styles.tripTitle}>
+                      {trip.name}
+                    </Text>
+                    <View style={[
+                      styles.statusDot,
+                      { backgroundColor: getStatusColor(trip.status) }
+                    ]} />
+                  </View>
+                  <Text variant="bodyMedium" style={styles.tripDescription}>
+                    {trip.description || `${trip.status.charAt(0).toUpperCase() + trip.status.slice(1)} trip`}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -74,79 +90,80 @@ export function TripsShowcase({ trips, onTripPress }: TripsShowcaseProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.background,
+    flex: 1,
+    backgroundColor: '#ffffff',
   },
   header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.textMuted,
-    fontWeight: '500',
-  },
-  scrollContainer: {
-    paddingHorizontal: 12,
-  },
-  gridContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 48,
+    paddingBottom: 16,
   },
-  emptyContainer: {
+  headerTitle: {
+    color: '#111827',
+    fontWeight: 'bold',
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  scrollView: {
     flex: 1,
+  },
+  content: {
+    padding: 24,
+    gap: 24,
+  },
+  emptyState: {
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 40,
-  },
-  emptyCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: 32,
-    alignItems: 'center',
-    shadowColor: Colors.tripCardShadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    maxWidth: 400,
-  },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: 16,
+    paddingVertical: 60,
+    gap: 16,
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 8,
+    color: '#111827',
     textAlign: 'center',
   },
-  emptySubtitle: {
+  emptyDescription: {
+    color: '#6b7280',
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  tripItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tripContent: {
+    flex: 1,
+    gap: 4,
+  },
+  tripHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  tripTitle: {
+    color: '#111827',
+    fontWeight: '600',
     fontSize: 16,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
   },
-  emptyFeatures: {
-    alignItems: 'flex-start',
-    width: '100%',
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  emptyFeature: {
+  tripDescription: {
+    color: '#6b7280',
     fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 8,
-    textAlign: 'left',
   },
 });

@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { MessagePart } from './MessagePart';
-import { Colors } from '@/constants/Colors';
 import type { UIMessage } from '@ai-sdk/ui-utils';
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
+import { Text } from 'react-native-paper';
+import Animated, { Easing, FadeIn } from 'react-native-reanimated';
+import { MessagePart } from './MessagePart';
 
 interface MessageProps {
   message: UIMessage;
@@ -10,143 +11,149 @@ interface MessageProps {
 
 export function Message({ message }: MessageProps) {
   const isUser = message.role === 'user';
-  const isAssistant = message.role === 'assistant';
   const isSystem = message.role === 'system';
   const isData = message.role === 'data';
 
+  // Filter and organize message parts
+  const otherParts = message.parts.filter(part => part.type !== 'reasoning');
+
+  // Skip system and data messages entirely
+  if (isSystem || isData) {
+    return null;
+  }
+
+  // Create subtle micro-animation that moves up just a few pixels
+  const enteringAnimation = FadeIn
+    .duration(120)
+    .easing(Easing.out(Easing.ease))
+    .delay(isUser ? 12 : 25)
+    .withInitialValues({
+      transform: [{ translateY: 16 }], // Start 8px below final position
+      opacity: 0
+    });
+
   return (
-    <View style={[
-      styles.messageContainer,
-      isUser && styles.userMessage,
-      isAssistant && styles.assistantMessage,
-    ]}>
-      {!isSystem && !isData && (
-        <View style={[
-          styles.avatar,
-          isUser && styles.userAvatar,
-          isAssistant && styles.assistantAvatar,
-        ]}>
-          <Text style={styles.avatarText}>
-            {isUser ? '👤' : '🤖'}
+    <Animated.View entering={enteringAnimation} style={styles.container}>
+      {/* Message Header */}
+      <Animated.View
+        entering={FadeIn
+          .duration(60)
+          .easing(Easing.out(Easing.ease))
+          .delay(isUser ? 25 : 37)
+          .withInitialValues({
+            transform: [{ translateY: 4 }], // Start 4px below
+            opacity: 0
+          })}
+        style={styles.header}
+      >
+        <Text variant="titleMedium" style={styles.senderName}>
+          {isUser ? 'You' : 'AI Travel Agent'}
+        </Text>
+        <Text variant="bodyMedium" style={styles.timeText}>
+          {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} AM
+        </Text>
+      </Animated.View>
+
+      {/* Message Content */}
+      <Animated.View
+        entering={FadeIn
+          .duration(70)
+          .easing(Easing.out(Easing.ease))
+          .delay(isUser ? 37 : 50)
+          .withInitialValues({
+            transform: [{ translateY: 6 }], // Start 6px below
+            opacity: 0
+          })}
+        style={styles.contentContainer}
+      >
+        {message.parts.length === 0 ? (
+          <Text style={styles.noContentText}>
+            No content
           </Text>
-        </View>
-      )}
-      
-      <View style={[
-        styles.bubble,
-        isUser && styles.userBubble,
-        isAssistant && styles.assistantBubble,
-        isSystem && styles.systemBubble,
-        isData && styles.dataBubble,
-      ]}>
-        {(isSystem || isData) && (
-          <View style={styles.systemHeader}>
-            <Text style={styles.systemIcon}>
-              {isSystem ? '⚙️' : '📊'}
-            </Text>
-            <Text style={styles.systemLabel}>
-              {message.role.charAt(0).toUpperCase() + message.role.slice(1)}
-            </Text>
+        ) : (
+          <View style={styles.partsContainer}>
+            {otherParts.map((part, index) => (
+              <MessagePart
+                key={`${message.id}-text-${index}`}
+                part={part}
+                index={index}
+                messageRole={message.role}
+              />
+            ))}
           </View>
         )}
-        
-        <View style={styles.content}>
-          {message.parts.length === 0 ? (
-            <Text style={styles.emptyMessage}>No content</Text>
-          ) : (
-            message.parts.map((part, index) => (
-              <MessagePart key={`${message.id}-${index}`} part={part} index={index} />
-            ))
-          )}
-        </View>
-      </View>
-    </View>
+      </Animated.View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  messageContainer: {
+  container: {
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  header: {
     flexDirection: 'row',
-    marginVertical: 6,
-    paddingHorizontal: 4,
-  },
-  userMessage: {
-    justifyContent: 'flex-end',
-  },
-  assistantMessage: {
-    justifyContent: 'flex-start',
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 8,
-    marginTop: 4,
+    gap: 8,
   },
-  userAvatar: {
-    backgroundColor: Colors.chatBubbleUser,
+  senderName: {
+    fontSize: 16,
+    fontFamily: 'PlusJakartaSans_700Bold',
+    color: '#111827',
   },
-  assistantAvatar: {
-    backgroundColor: Colors.primary,
-  },
-  avatarText: {
+  timeText: {
     fontSize: 14,
-    color: Colors.surface,
+    fontFamily: 'PlusJakartaSans_400Regular',
+    color: '#6b7280',
   },
-  bubble: {
-    maxWidth: '75%',
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginHorizontal: 4,
+  reasoningContainer: {
+    gap: 8,
+    marginTop: 8,
   },
-  userBubble: {
-    backgroundColor: Colors.chatBubbleUser,
-    borderBottomRightRadius: 4,
-    alignSelf: 'flex-end',
-  },
-  assistantBubble: {
-    backgroundColor: Colors.chatBubbleAssistant,
-    borderWidth: 1,
-    borderColor: Colors.chatBubbleBorder,
-    borderBottomLeftRadius: 4,
+  reasoningButton: {
     alignSelf: 'flex-start',
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
   },
-  systemBubble: {
-    backgroundColor: Colors.warning,
-    alignSelf: 'center',
-    maxWidth: '90%',
+  reasoningButtonText: {
+    fontSize: 12,
+    color: '#8b5cf6',
+    fontWeight: '500',
+  },
+  reasoningContent: {
+    backgroundColor: '#f3f4f6',
     borderRadius: 12,
+    padding: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#8b5cf6',
+    marginLeft: 8,
+    gap: 8,
   },
-  dataBubble: {
-    backgroundColor: Colors.info,
-    alignSelf: 'center',
-    maxWidth: '90%',
-    borderRadius: 12,
-  },
-  systemHeader: {
+  reasoningHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    gap: 8,
   },
-  systemIcon: {
-    fontSize: 14,
-    marginRight: 6,
-  },
-  systemLabel: {
-    fontSize: 12,
+  reasoningTitle: {
     fontWeight: '600',
-    color: Colors.surface,
+    color: '#8b5cf6',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  content: {
-    flex: 1,
+  reasoningDivider: {
+    backgroundColor: '#e5e7eb',
   },
-  emptyMessage: {
-    fontSize: 14,
-    color: Colors.textMuted,
+  contentContainer: {
+    gap: 4,
+  },
+  noContentText: {
+    color: '#6b7280',
+    fontSize: 16,
+    fontFamily: 'PlusJakartaSans_400Regular',
     fontStyle: 'italic',
+  },
+  partsContainer: {
+    gap: 4,
   },
 });

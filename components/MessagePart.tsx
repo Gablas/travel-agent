@@ -1,356 +1,403 @@
-import { Colors } from '@/constants/Colors';
+import { useGlobalChat } from '@/contexts/ChatContext';
 import type { UIMessage } from '@ai-sdk/ui-utils';
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import React, { useEffect } from 'react';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import Markdown from 'react-native-markdown-display';
+import { Text } from 'react-native-paper';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  FadeIn,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming
+} from 'react-native-reanimated';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 // Extract the part types from the actual AI SDK UIMessage
 export type UIMessagePart = UIMessage['parts'][number];
 
-// Type guards for better type safety
-function isFilePartWithName(part: UIMessagePart): part is UIMessagePart & { name: string } {
-  return part.type === 'file' && 'name' in part;
-}
-
-function isFilePartWithMimeType(part: UIMessagePart): part is UIMessagePart & { mimeType: string } {
-  return part.type === 'file' && 'mimeType' in part;
-}
-
-function isSourcePartWithTitle(part: UIMessagePart): part is UIMessagePart & { source: { title: string; url: string } } {
-  return part.type === 'source' && 'title' in part.source;
-}
-
 interface MessagePartProps {
   part: UIMessagePart;
   index: number;
+  messageRole?: string;
 }
 
-export function MessagePart({ part, index }: MessagePartProps) {
-  switch (part.type) {
-    case 'text':
-      return (
-        <View style={styles.textContainer}>
-          <Markdown style={markdownStyles}>{part.text}</Markdown>
-        </View>
-      );
+export function MessagePart({ part, index, messageRole }: MessagePartProps) {
+  const { hideChat } = useGlobalChat();
 
-    case 'reasoning':
-      return (
-        <View style={styles.reasoningContainer}>
-          <View style={styles.reasoningHeader}>
-            <Text style={styles.reasoningLabel}>💭 Reasoning</Text>
+  // Create a subtle micro-animation with small upward movement
+  const staggerDelay = index * 10; // 40ms / 4 = 10ms delay between parts
+  const enteringAnimation = FadeIn
+    .duration(120)
+    .easing(Easing.out(Easing.ease))
+    .delay(62 + staggerDelay) // 250ms / 4 = ~62ms base delay
+    .withInitialValues({
+      transform: [{ translateY: 16 }], // Start just 16px below final position
+      opacity: 0
+    });
+
+  // Pulse animation for tool calls in progress
+  const pulseValue = useSharedValue(1);
+
+  // Check if this is a tool call that's still in progress
+  const isToolInProgress = part.type === 'tool-invocation' &&
+    part.toolInvocation.state !== 'result';
+
+  // Helper function to parse tool result JSON
+  const parseToolResult = (result: string) => {
+    try {
+      return JSON.parse(result);
+    } catch {
+      return null;
+    }
+  };
+
+  // Helper function to handle navigation
+  const handleToolClick = (toolName: string, result: string) => {
+    const parsedResult = parseToolResult(result);
+    if (!parsedResult) return;
+
+    // Close the chat before navigating
+    hideChat();
+
+    if (parsedResult.type === 'entry_created' && parsedResult.entryId) {
+      router.push({
+        pathname: "/activity/[id]",
+        params: { id: parsedResult.entryId }
+      });
+    } else if ((parsedResult.type === 'day_created' || parsedResult.type === 'day_ready') && parsedResult.tripId) {
+      router.push({
+        pathname: "/trip/[id]",
+        params: { id: parsedResult.tripId }
+      });
+    }
+  };
+
+  // Helper function to get display message
+  const getDisplayMessage = (toolName: string, result: string) => {
+    const parsedResult = parseToolResult(result);
+    if (parsedResult?.message) {
+      return parsedResult.message;
+    }
+    return result;
+  };
+
+  // Helper function to check if tool result is clickable
+  const isClickable = (toolName: string, result: string) => {
+    const parsedResult = parseToolResult(result);
+    return parsedResult && (parsedResult.type === 'entry_created' || parsedResult.type === 'day_created' || parsedResult.type === 'day_ready');
+  };
+
+  useEffect(() => {
+    if (isToolInProgress) {
+      pulseValue.value = withRepeat(
+        withSequence(
+          withTiming(0.6, { duration: 800, easing: Easing.out(Easing.ease) }),
+          withTiming(1, { duration: 800, easing: Easing.out(Easing.ease) })
+        ),
+        -1,
+        false
+      );
+    } else {
+      cancelAnimation(pulseValue);
+      pulseValue.value = withTiming(1, { duration: 200 });
+    }
+  }, [isToolInProgress, pulseValue]);
+
+  const pulseStyle = useAnimatedStyle(() => {
+    return {
+      opacity: pulseValue.value,
+    };
+  });
+
+  const renderContent = () => {
+    switch (part.type) {
+      case 'text':
+        return (
+          <View>
+            <Markdown
+              style={{
+                body: {
+                  fontSize: 16,
+                  lineHeight: 24,
+                  color: '#111827',
+                  margin: 0,
+                  fontFamily: 'PlusJakartaSans_400Regular',
+                },
+                paragraph: {
+                  marginBottom: 0,
+                  color: '#111827',
+                  lineHeight: 24,
+                  fontFamily: 'PlusJakartaSans_400Regular',
+                },
+                heading1: {
+                  fontSize: 24,
+                  fontWeight: 'bold',
+                  marginBottom: 16,
+                  color: '#1a202c',
+                  lineHeight: 32,
+                },
+                heading2: {
+                  fontSize: 20,
+                  fontWeight: 'bold',
+                  marginBottom: 14,
+                  color: '#1a202c',
+                  lineHeight: 28,
+                },
+                heading3: {
+                  fontSize: 18,
+                  fontWeight: 'bold',
+                  marginBottom: 12,
+                  color: '#1a202c',
+                  lineHeight: 26,
+                },
+                strong: {
+                  fontWeight: '600',
+                  color: '#1a202c',
+                },
+                em: {
+                  fontStyle: 'italic',
+                  color: '#4a5568',
+                },
+                code_inline: {
+                  backgroundColor: '#f1f5f9',
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: 4,
+                  fontFamily: 'monospace',
+                  fontSize: 14,
+                  color: '#2d3748',
+                },
+                code_block: {
+                  backgroundColor: '#f8fafc',
+                  padding: 16,
+                  borderRadius: 8,
+                  fontFamily: 'monospace',
+                  fontSize: 14,
+                  marginVertical: 12,
+                  color: '#2d3748',
+                  borderLeftWidth: 3,
+                  borderLeftColor: '#cbd5e0',
+                },
+                list_item: {
+                  marginBottom: 6,
+                  color: '#1a202c',
+                  lineHeight: 24,
+                }
+              }}
+            >
+              {part.text}
+            </Markdown>
           </View>
-          <Markdown style={markdownStyles}>{part.reasoning}</Markdown>
-        </View>
-      );
+        );
 
-    case 'tool-invocation':
-      return (
-        <View style={styles.toolContainer}>
-          <View style={styles.toolHeader}>
-            <Text style={styles.toolLabel}>
-              🛠️ {part.toolInvocation.toolName}
-            </Text>
-            <View style={[
-              styles.statusBadge,
-              part.toolInvocation.state === 'partial-call' && styles.statusPartialcall,
-              part.toolInvocation.state === 'call' && styles.statusCall,
-              part.toolInvocation.state === 'result' && styles.statusResult,
-            ]}>
-              <Text style={styles.statusText}>
-                {part.toolInvocation.state}
-              </Text>
-            </View>
+      case 'reasoning':
+        return (
+          <View>
+            <Markdown
+              style={{
+                body: {
+                  fontSize: 14,
+                  lineHeight: 20,
+                  color: '#4a5568',
+                  margin: 0,
+                },
+                paragraph: {
+                  marginBottom: 8,
+                  color: '#4a5568',
+                },
+                heading1: {
+                  fontSize: 16,
+                  fontWeight: 'bold',
+                  marginBottom: 8,
+                  color: '#2d3748',
+                },
+                heading2: {
+                  fontSize: 15,
+                  fontWeight: 'bold',
+                  marginBottom: 6,
+                  color: '#2d3748',
+                },
+                strong: {
+                  fontWeight: 'bold',
+                  color: '#2d3748',
+                },
+                em: {
+                  fontStyle: 'italic',
+                  color: '#4a5568',
+                },
+                code_inline: {
+                  backgroundColor: '#f1f5f9',
+                  paddingHorizontal: 4,
+                  paddingVertical: 2,
+                  borderRadius: 4,
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: '#2d3748',
+                }
+              }}
+            >
+              {part.reasoning}
+            </Markdown>
           </View>
+        );
+      case 'tool-invocation': {
+        const getToolIcon = (toolName: string) => {
+          switch (toolName) {
+            case 'searchAndContents':
+            case 'getContent':
+              return <Icon name="search" size={28} color="#6b7280" />;
+            case 'createTrip':
+            case 'createDay':
+            case 'createEntry':
+            case 'createMultipleEntries':
+            case 'getOrCreateDay':
+              return <Icon name="add" size={28} color="#6b7280" />;
+            case 'updateTrip':
+              return <Icon name="edit" size={28} color="#6b7280" />;
+            case 'deleteTrip':
+            case 'deleteEntry':
+            case 'deleteMultipleEntries':
+            case 'clearDay':
+              return <Icon name="delete" size={28} color="#6b7280" />;
+            case 'getTrips':
+            case 'getTrip':
+            case 'findEntriesByName':
+            case 'findEntriesByCategory':
+            case 'findEntriesByDay':
+              return <Icon name="list" size={28} color="#6b7280" />;
+            default:
+              return <Icon name="bolt" size={28} color="#6b7280" />;
+          }
+        };
 
-          {'args' in part.toolInvocation && part.toolInvocation.args && (
-            <View style={styles.toolSection}>
-              <Text style={styles.sectionLabel}>Arguments:</Text>
-              <Text style={styles.codeText}>
-                {JSON.stringify(part.toolInvocation.args, null, 2)}
+        const getToolDisplayName = (toolName: string) => {
+          switch (toolName) {
+            case 'searchAndContents':
+              return 'Searching for Information';
+            case 'getContent':
+              return 'Getting Content';
+            case 'createTrip':
+              return 'Creating Trip';
+            case 'createDay':
+            case 'getOrCreateDay':
+              return 'Creating Day';
+            case 'createEntry':
+              return 'Creating Activity';
+            case 'createMultipleEntries':
+              return 'Creating Activities';
+            case 'updateTrip':
+              return 'Updating Trip';
+            case 'deleteTrip':
+              return 'Deleting Trip';
+            case 'deleteEntry':
+              return 'Deleting Activity';
+            case 'deleteMultipleEntries':
+              return 'Deleting Activities';
+            case 'clearDay':
+              return 'Clearing Day';
+            case 'getTrips':
+              return 'Getting Trips';
+            case 'getTrip':
+              return 'Getting Trip Details';
+            case 'findEntriesByName':
+            case 'findEntriesByCategory':
+            case 'findEntriesByDay':
+              return 'Finding Activities';
+            default:
+              return toolName;
+          }
+        };
+
+        const toolName = part.toolInvocation.toolName;
+        const result = part.toolInvocation.state === 'result' ? part.toolInvocation.result : null;
+        const isCompleted = part.toolInvocation.state === 'result';
+        const clickable = isCompleted && result && isClickable(toolName, result);
+
+        const ToolContent = (
+          <Animated.View style={[styles.toolInvocation, isToolInProgress ? pulseStyle : undefined]}>
+            <View style={styles.toolIcon}>{getToolIcon(toolName)}</View>
+            <View style={styles.toolTextContainer}>
+              <Text style={styles.toolText}>
+                {getToolDisplayName(toolName)}
               </Text>
+              {clickable && (
+                <Text style={styles.clickHint}>
+                  Tap to view
+                </Text>
+              )}
             </View>
-          )}
-        </View>
-      );
+          </Animated.View>
+        );
 
-    case 'source':
-      return (
-        <View style={styles.sourceContainer}>
-          <Text style={styles.sourceLabel}>📄 Source</Text>
-          <Text style={styles.sourceTitle}>
-            {isSourcePartWithTitle(part) ? part.source.title : part.source.url}
-          </Text>
-          <Text style={styles.sourceUrl}>{part.source.url}</Text>
-        </View>
-      );
+        if (clickable) {
+          return (
+            <TouchableOpacity
+              onPress={() => handleToolClick(toolName, result)}
+              style={styles.clickableContainer}
+            >
+              {ToolContent}
+            </TouchableOpacity>
+          );
+        }
 
-    case 'file':
-      return (
-        <View style={styles.fileContainer}>
-          <Text style={styles.fileLabel}>📎 File</Text>
-          <Text style={styles.fileName}>
-            {isFilePartWithName(part) ? part.name : 'Untitled file'}
-          </Text>
-          <Text style={styles.fileType}>
-            {isFilePartWithMimeType(part) ? part.mimeType : 'Unknown type'}
-          </Text>
-        </View>
-      );
+        return ToolContent;
+      }
+      case 'source':
+      case 'file':
+      case 'step-start':
+        return null;
 
-    case 'step-start':
-      return (
-        <View style={styles.stepContainer}>
-          <Text style={styles.stepText}>▶️ Step started</Text>
-        </View>
-      );
+      default:
+        return null;
+    }
+  };
 
-    default:
-      return (
-        <View style={styles.unknownContainer}>
-          <Text style={styles.unknownText}>
-            Unknown part type
-          </Text>
-        </View>
-      );
-  }
+  return (
+    <Animated.View entering={enteringAnimation}>
+      {renderContent()}
+    </Animated.View>
+  );
 }
 
 const styles = StyleSheet.create({
-  // Text parts
-  textContainer: {
+  toolInvocation: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    paddingVertical: 8,
     marginVertical: 4,
   },
-
-  // Reasoning parts
-  reasoningContainer: {
-    backgroundColor: Colors.surfaceSecondary,
-    borderRadius: 12,
-    padding: 12,
-    marginVertical: 4,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
-  },
-  reasoningHeader: {
-    marginBottom: 8,
-  },
-  reasoningLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-
-  // Tool invocation parts
-  toolContainer: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 12,
-    marginVertical: 4,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  toolHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  toolLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.info,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  statusPartialcall: {
-    backgroundColor: Colors.warning,
-  },
-  statusCall: {
-    backgroundColor: Colors.info,
-  },
-  statusResult: {
-    backgroundColor: Colors.success,
-  },
-  statusError: {
-    backgroundColor: Colors.error,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: Colors.surface,
-  },
-  toolSection: {
-    marginTop: 8,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  codeText: {
-    fontFamily: 'monospace',
-    fontSize: 12,
-    backgroundColor: Colors.surfaceSecondary,
-    padding: 8,
-    borderRadius: 4,
-    color: Colors.text,
-  },
-  resultText: {
-    fontSize: 13,
-    color: Colors.success,
-    backgroundColor: Colors.surfaceSecondary,
-    padding: 8,
-    borderRadius: 4,
-  },
-  errorLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.error,
-    marginBottom: 4,
-  },
-  errorText: {
-    fontSize: 13,
-    color: Colors.error,
-    backgroundColor: Colors.surfaceSecondary,
-    padding: 8,
-    borderRadius: 4,
-  },
-
-  // Source parts
-  sourceContainer: {
-    backgroundColor: Colors.surfaceSecondary,
-    borderRadius: 12,
-    padding: 12,
-    marginVertical: 4,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.warning,
-  },
-  sourceLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.warning,
-    marginBottom: 4,
-  },
-  sourceTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.text,
-    marginBottom: 2,
-  },
-  sourceUrl: {
-    fontSize: 12,
-    color: Colors.textMuted,
-  },
-
-  // File parts
-  fileContainer: {
-    backgroundColor: Colors.surfaceSecondary,
-    borderRadius: 12,
-    padding: 12,
-    marginVertical: 4,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.secondary,
-  },
-  fileLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.secondary,
-    marginBottom: 4,
-  },
-  fileName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.text,
-    marginBottom: 2,
-  },
-  fileType: {
-    fontSize: 12,
-    color: Colors.textMuted,
-  },
-
-  // Step parts
-  stepContainer: {
-    backgroundColor: Colors.surfaceSecondary,
-    borderRadius: 12,
-    padding: 8,
-    marginVertical: 4,
-    alignItems: 'center',
-  },
-  stepText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: Colors.textMuted,
-  },
-
-  // Unknown parts
-  unknownContainer: {
-    backgroundColor: Colors.surfaceSecondary,
-    borderRadius: 12,
-    padding: 12,
-    marginVertical: 4,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.error,
-  },
-  unknownText: {
-    fontSize: 12,
-    color: Colors.error,
-  },
-});
-
-const markdownStyles = StyleSheet.create({
-  body: {
+  toolIcon: {
+    backgroundColor: '#deecfa',
     fontSize: 16,
-    lineHeight: 24,
-    color: Colors.text,
-  },
-  heading1: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    color: Colors.text,
-  },
-  heading2: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: Colors.text,
-  },
-  paragraph: {
-    marginBottom: 12,
-    color: Colors.text,
-  },
-  code_inline: {
-    backgroundColor: Colors.surfaceSecondary,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 4,
-    fontFamily: 'monospace',
-    fontSize: 14,
-    color: Colors.text,
-  },
-  code_block: {
-    backgroundColor: Colors.surfaceSecondary,
-    padding: 12,
+    padding: 4,
     borderRadius: 8,
-    fontFamily: 'monospace',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  toolText: {
+    color: '#6b7280',
+    fontFamily: 'PlusJakartaSans_500Medium',
     fontSize: 14,
-    marginVertical: 8,
-    color: Colors.text,
   },
-  list_item: {
-    marginBottom: 4,
-    color: Colors.text,
+  toolTextContainer: {
+    flexDirection: 'column',
   },
-  strong: {
-    fontWeight: 'bold',
-    color: Colors.text,
+  clickHint: {
+    color: '#3b82f6',
+    fontFamily: 'PlusJakartaSans_400Regular',
+    fontSize: 12,
+    marginTop: 2,
   },
-  em: {
-    fontStyle: 'italic',
-    color: Colors.text,
+  clickableContainer: {
+    borderRadius: 8,
+    padding: 4,
+    marginHorizontal: -4,
   },
 });
+

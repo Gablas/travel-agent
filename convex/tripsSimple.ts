@@ -18,14 +18,10 @@ export const createTrip = mutation({
         return await ctx.db.insert("trips", {
             name: args.name,
             description: args.description,
-            startDate: args.startDate,
-            endDate: args.endDate,
             status: "planning",
             budget: args.budget,
             travelers: args.travelers,
             notes: args.notes,
-            days: [],
-            links: [],
             createdAt: now,
             updatedAt: now,
         });

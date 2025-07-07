@@ -1,12 +1,12 @@
 import '@/polyfills';
-import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { ClerkProvider } from '@clerk/clerk-expo';
+import { tokenCache } from '@clerk/clerk-expo/token-cache';
+import { PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_700Bold, PlusJakartaSans_800ExtraBold, useFonts } from '@expo-google-fonts/plus-jakarta-sans';
 import { ConvexProvider, ConvexReactClient } from "convex/react";
-import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { ChatProvider } from '@/contexts/ChatContext';
-import { ChatOverlay } from '@/components/ChatOverlay';
-import { ChatToggleButton } from '@/components/ChatToggleButton';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
+import { PaperProvider } from 'react-native-paper';
 import 'react-native-reanimated';
 
 // biome-ignore lint/style/noNonNullAssertion: <explanation>
@@ -14,30 +14,42 @@ const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!, {
   unsavedChangesWarning: false,
 });
 
+// biome-ignore lint/style/noNonNullAssertion: <explanation>
+const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
+
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+  const [fontsLoaded] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
   });
 
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null; // Show splash screen while fonts load
   }
 
   return (
-    <ThemeProvider value={DefaultTheme}>
-      <ConvexProvider client={convex}>
-        <ChatProvider>
+    <PaperProvider>
+      <ClerkProvider tokenCache={tokenCache} publishableKey={clerkPublishableKey}>
+        <ConvexProvider client={convex}>
           <Stack>
             <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            <Stack.Screen name="(home)" options={{ headerShown: false }} />
             <Stack.Screen name="+not-found" />
           </Stack>
-          <ChatOverlay />
-          <ChatToggleButton />
-          <StatusBar style="light" />
-        </ChatProvider>
-      </ConvexProvider>
-    </ThemeProvider>
+        </ConvexProvider>
+      </ClerkProvider>
+    </PaperProvider>
   );
 }

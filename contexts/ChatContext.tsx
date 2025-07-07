@@ -1,8 +1,8 @@
-import React, { createContext, useContext, type ReactNode } from 'react';
-import { useChat } from '@ai-sdk/react';
-import { fetch as expoFetch } from 'expo/fetch';
 import { generateAPIUrl } from '@/utils';
+import { useChat } from '@ai-sdk/react';
 import type { UIMessage } from '@ai-sdk/ui-utils';
+import { fetch as expoFetch } from 'expo/fetch';
+import React, { createContext, useContext, useEffect, type ReactNode } from 'react';
 
 interface ChatContextType {
   messages: UIMessage[];
@@ -10,10 +10,13 @@ interface ChatContextType {
   handleInputChange: (text: string) => void;
   handleSubmit: () => void;
   isLoading: boolean;
+  loadingStatus: 'thinking' | 'researching' | 'planning' | 'generating';
   isVisible: boolean;
   toggleChat: () => void;
   showChat: () => void;
   hideChat: () => void;
+  status: 'submitted' | 'streaming' | 'ready' | 'error';
+  lastPart: "reasoning" | "text" | "tool-invocation" | "source" | "file" | "step-start" | null;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -24,19 +27,44 @@ interface ChatProviderProps {
 
 export function ChatProvider({ children }: ChatProviderProps) {
   const [isVisible, setIsVisible] = React.useState(false);
-  
-  const { 
-    messages, 
-    handleInputChange: originalHandleInputChange, 
-    input, 
-    handleSubmit: originalHandleSubmit, 
-    status 
+  const [loadingStatus, setLoadingStatus] = React.useState<'thinking' | 'researching' | 'planning' | 'generating'>('thinking');
+  const [lastPart, setLastPart] = React.useState<"reasoning" | "text" | "tool-invocation" | "source" | "file" | "step-start" | null>(null);
+
+  const {
+    messages,
+    handleInputChange: originalHandleInputChange,
+    input,
+    handleSubmit: originalHandleSubmit,
+    status
   } = useChat({
     fetch: expoFetch as unknown as typeof globalThis.fetch,
     api: generateAPIUrl('/api/chat'),
     onError: error => console.error(error, 'ERROR'),
-    experimental_throttle: 200
+    experimental_throttle: 200,
+    onFinish: () => {
+      setLoadingStatus('thinking');
+    },
+    id: 'travel-chat',
   });
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      console.log('Latest message structure:', {
+        id: lastMessage.id,
+        role: lastMessage.role,
+        hasCreatedAt: !!lastMessage.createdAt,
+        messageCount: messages.length
+      });
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.parts?.length > 0) {
+      setLastPart(lastMessage.parts[lastMessage.parts.length - 1].type);
+    }
+  }, [messages]);
 
   const handleInputChange = (text: string) => {
     originalHandleInputChange({
@@ -45,6 +73,9 @@ export function ChatProvider({ children }: ChatProviderProps) {
   };
 
   const handleSubmit = () => {
+    if (isLoading) return; // Prevent submission while loading
+
+
     originalHandleSubmit();
   };
 
@@ -60,18 +91,21 @@ export function ChatProvider({ children }: ChatProviderProps) {
     setIsVisible(false);
   };
 
-  const isLoading = status === 'streaming' || status === 'submitted';
+  const isLoading = status !== 'ready';
 
   const contextValue: ChatContextType = {
     messages,
     input,
     handleInputChange,
     handleSubmit,
+    status,
     isLoading,
+    loadingStatus,
     isVisible,
     toggleChat,
     showChat,
     hideChat,
+    lastPart,
   };
 
   return (

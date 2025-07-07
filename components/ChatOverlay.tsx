@@ -1,238 +1,84 @@
-import React, { useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  Animated,
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
-  PanResponder,
-} from 'react-native';
-import { Colors } from '@/constants/Colors';
-import { Message } from './Message';
 import { useGlobalChat } from '@/contexts/ChatContext';
-
-const { width, height } = Dimensions.get('window');
+import { useKeyboardAvoidance } from '@/hooks/useKeyboardAvoidance';
+import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { IconButton, Text } from 'react-native-paper';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { Message } from './Message';
 
 export function ChatOverlay() {
-  const {
-    messages,
-    input,
-    handleInputChange,
-    handleSubmit,
-    isLoading,
-    isVisible,
-    hideChat,
-  } = useGlobalChat();
-
-  const slideAnim = useRef(new Animated.Value(width)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-  const scrollViewRef = useRef<ScrollView>(null);
-
-  useEffect(() => {
-    if (isVisible) {
-      // Slide in from right
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      // Slide out to right
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: width,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 0,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [isVisible, slideAnim, opacityAnim]);
-
-  useEffect(() => {
-    if (messages.length > 0 && isVisible) {
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-  }, [messages, isVisible]);
-
-  const handleOverlayPress = () => {
-    hideChat();
-  };
-
-  const handleChatPress = (event: any) => {
-    event.stopPropagation();
-  };
-
-  const handleSubmitMessage = () => {
-    if (input.trim() && !isLoading) {
-      handleSubmit();
-    }
-  };
-
-  const panResponder = PanResponder.create({
-    onMoveShouldSetPanResponder: (evt, gestureState) => {
-      return gestureState.dx > 10 && Math.abs(gestureState.dy) < 100;
-    },
-    onPanResponderMove: (evt, gestureState) => {
-      if (gestureState.dx > 0) {
-        slideAnim.setValue(gestureState.dx);
-      }
-    },
-    onPanResponderRelease: (evt, gestureState) => {
-      if (gestureState.dx > width * 0.3) {
-        hideChat();
-      } else {
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          useNativeDriver: true,
-        }).start();
-      }
-    },
+  const { messages, input, handleInputChange, handleSubmit, isVisible, hideChat, status, lastPart } = useGlobalChat();
+  const { inputContainerStyle, messagesContainerStyle } = useKeyboardAvoidance({
+    iosWordSuggestionHeight: 60,
   });
 
-  if (!isVisible && slideAnim._value === width) {
+  if (!isVisible) {
     return null;
   }
 
   return (
-    <Animated.View
-      style={[
-        styles.overlay,
-        {
-          opacity: opacityAnim,
-        },
-      ]}
-      pointerEvents={isVisible ? 'auto' : 'none'}
-    >
-      <TouchableOpacity
-        style={styles.backdrop}
-        onPress={handleOverlayPress}
-        activeOpacity={1}
-      />
-      
-      <Animated.View
-        style={[
-          styles.chatContainer,
-          {
-            transform: [{ translateX: slideAnim }],
-          },
-        ]}
-        {...panResponder.panHandlers}
-      >
-        <TouchableOpacity
-          style={styles.chatContent}
-          onPress={handleChatPress}
-          activeOpacity={1}
+    <View style={styles.overlay}>
+      <View style={styles.header}>
+        <IconButton
+          icon="arrow-left"
+          size={24}
+          onPress={hideChat}
+          style={styles.backButton}
+        />
+        <Text style={styles.title}>
+          Trip Planner
+        </Text>
+        <View style={styles.spacer} />
+      </View>
+
+      {/* Messages Area */}
+      <View style={[styles.messagesContainer, messagesContainerStyle]}>
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
         >
-          <KeyboardAvoidingView
-            style={styles.keyboardView}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={0}
-          >
-            {/* Chat Header */}
-            <View style={styles.header}>
-              <View style={styles.headerContent}>
-                <Text style={styles.headerTitle}>🤖 AI Travel Assistant</Text>
-                <Text style={styles.headerSubtitle}>
-                  {messages.length === 0 ? 'Start planning your trip...' : `${messages.length} messages`}
-                </Text>
-              </View>
-              <TouchableOpacity style={styles.closeButton} onPress={hideChat}>
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-              {isLoading && (
-                <View style={styles.loadingIndicator}>
-                  <Text style={styles.loadingDot}>●</Text>
-                  <Text style={styles.loadingDot}>●</Text>
-                  <Text style={styles.loadingDot}>●</Text>
-                </View>
+          {messages.length === 0 ? (
+            null
+          ) : (
+            <View style={styles.messagesList}>
+              {messages.map((message, index) => {
+                // Ensure each message has a stable, unique key
+                // If message.id is missing, generate a stable fallback
+                const messageKey = message.id || `message-${message.role}-${message.createdAt?.getTime() || index}`;
+
+                // Log warning if message.id is missing (for debugging)
+                if (!message.id) {
+                  console.warn('Message missing ID:', { role: message.role, content: message.content?.substring(0, 50) });
+                }
+
+                return (
+                  <Message key={messageKey} message={message} />
+                );
+              })}
+              {lastPart === 'reasoning' && (
+                <Animated.View entering={FadeIn} exiting={FadeOut}>
+                  <Text style={{ color: "black" }}>Thinking...</Text>
+                </Animated.View>
               )}
             </View>
+          )}
+        </ScrollView>
+      </View>
 
-            {/* Messages */}
-            <ScrollView
-              ref={scrollViewRef}
-              style={styles.messagesContainer}
-              contentContainerStyle={styles.messagesContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {messages.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyIcon}>✈️</Text>
-                  <Text style={styles.emptyTitle}>Ready to plan?</Text>
-                  <Text style={styles.emptySubtitle}>
-                    Ask me anything about your trips, destinations, or travel plans!
-                  </Text>
-                </View>
-              ) : (
-                messages.map((message, index) => (
-                  <View key={message.id || index} style={styles.messageWrapper}>
-                    <Message message={message} />
-                  </View>
-                ))
-              )}
-            </ScrollView>
-
-            {/* Input */}
-            <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    isLoading && styles.textInputDisabled
-                  ]}
-                  placeholder="Type your message..."
-                  placeholderTextColor={Colors.textMuted}
-                  value={input}
-                  onChangeText={handleInputChange}
-                  onSubmitEditing={handleSubmitMessage}
-                  editable={!isLoading}
-                  multiline
-                  maxLength={1000}
-                  returnKeyType="send"
-                  blurOnSubmit={false}
-                  enablesReturnKeyAutomatically
-                  textAlignVertical="center"
-                />
-                <TouchableOpacity
-                  style={[
-                    styles.sendButton,
-                    (!input.trim() || isLoading) && styles.sendButtonDisabled
-                  ]}
-                  onPress={handleSubmitMessage}
-                  disabled={!input.trim() || isLoading}
-                >
-                  <Text style={[
-                    styles.sendButtonText,
-                    (!input.trim() || isLoading) && styles.sendButtonTextDisabled
-                  ]}>
-                    {isLoading ? '...' : '→'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </TouchableOpacity>
-      </Animated.View>
-    </Animated.View>
+      {/* Enhanced Input Area */}
+      <View style={[styles.inputContainer, inputContainerStyle]}>
+        <TextInput
+          value={input}
+          editable={status === 'ready' || status === 'error'}
+          onChangeText={handleInputChange}
+          placeholder={status === 'ready' || status === 'error' ? "Type a message" : "Thinking..."}
+          placeholderTextColor="#999"
+          returnKeyType='done'
+          onSubmitEditing={handleSubmit}
+          style={styles.textInput}
+        />
+      </View>
+    </View>
   );
 }
 
@@ -240,170 +86,113 @@ const styles = StyleSheet.create({
   overlay: {
     position: 'absolute',
     top: 0,
-    left: 0,
     right: 0,
     bottom: 0,
+    width: 400,
+    paddingHorizontal: 16,
+    backgroundColor: '#ffffff',
     zIndex: 1000,
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  chatContainer: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: width > 768 ? 400 : width * 0.9,
-    maxWidth: 450,
-  },
-  chatContent: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: 20,
-    borderBottomLeftRadius: 20,
+    borderLeftWidth: 1,
+    borderLeftColor: '#e5e7eb',
     shadowColor: '#000',
-    shadowOffset: { width: -4, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  keyboardView: {
-    flex: 1,
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 16,
+    paddingTop: 32,
+    paddingBottom: 16,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    backgroundColor: '#ffffff',
     paddingVertical: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
-    backgroundColor: Colors.primary,
-    borderTopLeftRadius: 20,
+    paddingBottom: 8,
+    justifyContent: 'space-between',
   },
-  headerContent: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.surface,
-    marginBottom: 2,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  backButton: {
+    width: 48,
+    height: 48,
+    margin: 0,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 12,
   },
-  closeButtonText: {
-    fontSize: 16,
-    color: Colors.surface,
-    fontWeight: '600',
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#121416',
+    textAlign: 'center',
+    flex: 1,
+    paddingRight: 48,
+    letterSpacing: -0.015,
+    lineHeight: 22,
   },
-  loadingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 12,
-  },
-  loadingDot: {
-    fontSize: 8,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginHorizontal: 1,
+  spacer: {
+    width: 0,
   },
   messagesContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#ffffff',
   },
-  messagesContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  scrollView: {
+    flex: 1,
   },
-  messageWrapper: {
-    marginVertical: 4,
+  scrollContent: {
+    padding: 16,
+    minHeight: '100%',
   },
   emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 24,
+    paddingVertical: 20,
+    gap: 24,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 20,
+  agentName: {
+    fontSize: 18,
     fontWeight: '600',
-    color: Colors.text,
+    color: '#111827',
     textAlign: 'center',
-    marginBottom: 8,
   },
-  emptySubtitle: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
+  messageContainer: {
+    gap: 8,
+  },
+  messageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  messageSender: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  messageTime: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  messageText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#111827',
+  },
+  messagesList: {
+    gap: 16,
+    paddingTop: 8,
   },
   inputContainer: {
-    backgroundColor: Colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    backgroundColor: Colors.background,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    minHeight: 44,
+    backgroundColor: '#ffffff',
+    padding: 16,
+    paddingBottom: 20,
   },
   textInput: {
-    flex: 1,
     fontSize: 16,
-    color: Colors.text,
-    maxHeight: 100,
-    paddingVertical: 8,
-    paddingRight: 8,
-  },
-  textInputDisabled: {
-    opacity: 0.6,
-  },
-  sendButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  sendButtonDisabled: {
-    backgroundColor: Colors.textMuted,
-  },
-  sendButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.surface,
-  },
-  sendButtonTextDisabled: {
-    color: Colors.surface,
+    fontFamily: 'PlusJakartaSans_400Regular',
+    color: '#111827',
+    minHeight: 40,
+    maxHeight: 120,
+    textAlignVertical: 'top',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f9fafb',
   },
 });

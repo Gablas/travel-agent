@@ -1,7 +1,11 @@
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
+import type { DayWithEntries, Entry } from '@/types';
 import { useQuery } from 'convex/react';
-import { Text, View, ScrollView, TouchableOpacity, Linking } from 'react-native';
+import { router } from 'expo-router';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { IconButton, Text } from 'react-native-paper';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 interface TripDetailProps {
   tripId: Id<"trips">;
@@ -9,415 +13,219 @@ interface TripDetailProps {
 }
 
 export function TripDetail({ tripId, onBack }: TripDetailProps) {
-  const trip = useQuery(api.tripsSimple.getTrip, { tripId });
-  
+  const trip = useQuery(api.trips.getTripWithDaysAndEntries, { tripId });
+
+  const getCategoryIcon = (category?: string) => {
+    switch (category) {
+      case 'transport':
+      case 'flight': return 'flight';
+      case 'hotel': return 'hotel';
+      case 'attraction':
+      case 'landmark': return 'place';
+      case 'restaurant': return 'restaurant';
+      case 'museum': return 'museum';
+      case 'park': return 'park';
+      case 'shopping': return 'shopping-cart';
+      case 'nightlife': return 'local-bar';
+      case 'activity': return 'local-activity';
+      default: return 'place';
+    }
+  };
+
+  const handleEntryPress = (entryId: Id<"entries">) => {
+    router.push({
+      pathname: "/activity/[id]",
+      params: { id: entryId }
+    });
+  };
+
   if (!trip) {
     return (
-      <View style={{ padding: 16 }}>
-        <Text>Loading trip details...</Text>
+      <View style={styles.loadingContainer}>
+        <Text variant="headlineSmall" style={styles.loadingText}>
+          Loading trip...
+        </Text>
       </View>
     );
   }
 
-  const handleLinkPress = (url: string) => {
-    Linking.openURL(url).catch(err => console.error('Failed to open URL:', err));
-  };
-
-  return (
-    <ScrollView style={{ flex: 1, padding: 16 }}>
-      {/* Header */}
-      <View style={{ marginBottom: 20 }}>
-        <TouchableOpacity 
-          onPress={onBack}
-          style={{ marginBottom: 12, padding: 8, backgroundColor: '#e0e0e0', borderRadius: 4, alignSelf: 'flex-start' }}
-        >
-          <Text style={{ fontWeight: 'bold' }}>← Back to Trips</Text>
-        </TouchableOpacity>
-        
-        <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>{trip.name}</Text>
-        {trip.description && (
-          <Text style={{ fontSize: 16, color: '#666', marginBottom: 12 }}>{trip.description}</Text>
-        )}
-        
-        {/* Trip Info */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-          {trip.startDate && (
-            <View style={{ backgroundColor: '#f0f0f0', padding: 8, borderRadius: 6 }}>
-              <Text style={{ fontSize: 12, color: '#666' }}>Start Date</Text>
-              <Text style={{ fontWeight: 'bold' }}>{trip.startDate}</Text>
-            </View>
-          )}
-          {trip.endDate && (
-            <View style={{ backgroundColor: '#f0f0f0', padding: 8, borderRadius: 6 }}>
-              <Text style={{ fontSize: 12, color: '#666' }}>End Date</Text>
-              <Text style={{ fontWeight: 'bold' }}>{trip.endDate}</Text>
-            </View>
-          )}
-          {trip.budget && (
-            <View style={{ backgroundColor: '#f0f0f0', padding: 8, borderRadius: 6 }}>
-              <Text style={{ fontSize: 12, color: '#666' }}>Budget</Text>
-              <Text style={{ fontWeight: 'bold' }}>${trip.budget}</Text>
-            </View>
-          )}
-          {trip.travelers && (
-            <View style={{ backgroundColor: '#f0f0f0', padding: 8, borderRadius: 6 }}>
-              <Text style={{ fontSize: 12, color: '#666' }}>Travelers</Text>
-              <Text style={{ fontWeight: 'bold' }}>{trip.travelers}</Text>
-            </View>
-          )}
-          <View style={{ backgroundColor: '#f0f0f0', padding: 8, borderRadius: 6 }}>
-            <Text style={{ fontSize: 12, color: '#666' }}>Status</Text>
-            <Text style={{ fontWeight: 'bold', textTransform: 'capitalize' }}>{trip.status}</Text>
-          </View>
-        </View>
-
-        {trip.notes && (
-          <View style={{ backgroundColor: '#fff3cd', padding: 12, borderRadius: 8, marginBottom: 16 }}>
-            <Text style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 4 }}>Notes:</Text>
-            <Text style={{ fontSize: 14 }}>{trip.notes}</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Trip Links */}
-      {trip.links && trip.links.length > 0 && (
-        <View style={{ marginBottom: 20 }}>
-          <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>Trip Resources</Text>
-          {trip.links.map((link, index) => (
-            <TouchableOpacity
-              key={index}
-              onPress={() => handleLinkPress(link.url)}
-              style={{ 
-                backgroundColor: '#e3f2fd', 
-                padding: 12, 
-                borderRadius: 8, 
-                marginBottom: 8,
-                borderLeftWidth: 4,
-                borderLeftColor: '#2196f3'
-              }}
-            >
-              <Text style={{ fontWeight: 'bold', color: '#1976d2' }}>{link.title}</Text>
-              <Text style={{ fontSize: 12, color: '#666', textTransform: 'capitalize' }}>{link.type}</Text>
-              {link.description && (
-                <Text style={{ fontSize: 14, marginTop: 4 }}>{link.description}</Text>
-              )}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      {/* Daily Itinerary */}
-      <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 16 }}>Daily Itinerary</Text>
-      
-      {trip.days && trip.days.length > 0 ? (
-        trip.days.map((day, index) => (
-          <DayDetailSimple key={index} day={day} />
-        ))
-      ) : (
-        <View style={{ backgroundColor: '#f5f5f5', padding: 16, borderRadius: 8, alignItems: 'center' }}>
-          <Text style={{ color: '#666', fontStyle: 'italic' }}>No days planned yet</Text>
-          <Text style={{ color: '#666', fontSize: 12, marginTop: 4 }}>
-            Ask the AI assistant to create a detailed itinerary for your trip!
-          </Text>
-        </View>
-      )}
-    </ScrollView>
-  );
-}
-
-interface DayDetailSimpleProps {
-  day: {
-    date: string;
-    dayNumber: number;
-    title?: string;
-    description?: string;
-    notes?: string;
-    visits: {
-      place: {
-        name: string;
-        description?: string;
-        address?: string;
-        city?: string;
-        country?: string;
-        latitude?: number;
-        longitude?: number;
-        placeType: string;
-        priceLevel?: string;
-        rating?: number;
-        openingHours?: string;
-        phone?: string;
-        website?: string;
-        googleMapsUrl?: string;
-        googlePlaceId?: string;
-        images?: string[];
-        tags?: string[];
-        notes?: string;
+  // Group entries by day
+  const groupedByDay = trip.days?.reduce((acc, day) => {
+    if (day.entries && day.entries.length > 0) {
+      acc[day.dayNumber] = {
+        day: day,
+        entries: day.entries.sort((a, b) => a.order - b.order)
       };
-      startTime?: string;
-      endTime?: string;
-      duration?: number;
-      order: number;
-      status: string;
-      notes?: string;
-      estimatedCost?: number;
-      actualCost?: number;
-    }[];
-    transportation: {
-      type: string;
-      duration?: number;
-      distance?: number;
-      cost?: number;
-      notes?: string;
-      bookingUrl?: string;
-      fromPlace?: string;
-      toPlace?: string;
-    }[];
-  };
-}
+    }
+    return acc;
+  }, {} as Record<number, { day: DayWithEntries; entries: Entry[] }>) || {};
 
-function DayDetailSimple({ day }: DayDetailSimpleProps) {
-  const handleLinkPress = (url: string) => {
-    Linking.openURL(url).catch(err => console.error('Failed to open URL:', err));
-  };
+  const sortedDays = Object.keys(groupedByDay)
+    .map(Number)
+    .sort((a, b) => a - b);
+
+  const hasEntries = sortedDays.length > 0;
 
   return (
-    <View style={{ marginBottom: 24, backgroundColor: '#ffffff', borderRadius: 12, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 }}>
-      {/* Day Header */}
-      <View style={{ backgroundColor: '#4CAF50', padding: 16 }}>
-        <Text style={{ fontSize: 18, fontWeight: 'bold', color: 'white' }}>
-          Day {day.dayNumber}: {day.title || day.date}
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <IconButton
+          icon="arrow-left"
+          size={24}
+          onPress={onBack}
+          style={styles.backButton}
+        />
+        <Text variant="headlineSmall" style={styles.headerTitle}>
+          Trip
         </Text>
-        {day.date && (
-          <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 14 }}>{day.date}</Text>
-        )}
-        {day.description && (
-          <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 14, marginTop: 4 }}>
-            {day.description}
-          </Text>
-        )}
+        <View style={styles.headerSpacer} />
       </View>
 
-      <View style={{ padding: 16 }}>
-        {/* Day Notes */}
-        {day.notes && (
-          <View style={{ backgroundColor: '#fff3cd', padding: 12, borderRadius: 8, marginBottom: 16 }}>
-            <Text style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 4 }}>Day Notes:</Text>
-            <Text style={{ fontSize: 14 }}>{day.notes}</Text>
-          </View>
-        )}
-
-        {/* Visits */}
-        {day.visits && day.visits.length > 0 ? (
-          <View>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>Planned Visits</Text>
-            {day.visits
-              .sort((a, b) => a.order - b.order)
-              .map((visit, index) => (
-                <View 
-                  key={index} 
-                  style={{ 
-                    marginBottom: 16,
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: 8,
-                    overflow: 'hidden',
-                    borderLeftWidth: 4,
-                    borderLeftColor: getPlaceTypeColor(visit.place?.placeType)
-                  }}
-                >
-                  {/* Visit Header */}
-                  <View style={{ backgroundColor: '#e9ecef', padding: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 16, fontWeight: 'bold' }}>
-                        {index + 1}. {visit.place?.name || 'Unknown Place'}
-                      </Text>
-                      {visit.place?.placeType && (
-                        <View style={{ 
-                          backgroundColor: getPlaceTypeColor(visit.place.placeType), 
-                          paddingHorizontal: 8, 
-                          paddingVertical: 4, 
-                          borderRadius: 12 
-                        }}>
-                          <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
-                            {visit.place.placeType.toUpperCase()}
+      {/* Content */}
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <View style={styles.content}>
+          {!hasEntries ? (
+            <View style={styles.emptyState}>
+              <Text variant="headlineSmall" style={styles.emptyTitle}>
+                No itinerary yet
+              </Text>
+              <Text variant="bodyMedium" style={styles.emptyDescription}>
+                Chat with our AI assistant to start planning your activities!
+              </Text>
+            </View>
+          ) : (
+            sortedDays.map((dayNumber) => {
+              const { day, entries } = groupedByDay[dayNumber];
+              return (
+                <View key={dayNumber} style={styles.daySection}>
+                  <Text style={styles.dayHeader}>
+                    Day {dayNumber}
+                  </Text>
+                  <View style={styles.dayEntries}>
+                    {entries.map((entry) => (
+                      <TouchableOpacity
+                        key={entry._id}
+                        style={styles.entryItem}
+                        onPress={() => handleEntryPress(entry._id)}
+                      >
+                        <View style={styles.iconContainer}>
+                          <Icon
+                            name={getCategoryIcon(entry.category)}
+                            size={24}
+                            color="#6b7280"
+                          />
+                        </View>
+                        <View style={styles.entryContent}>
+                          <Text variant="titleMedium" style={styles.entryTitle}>
+                            {entry.name}
+                          </Text>
+                          <Text variant="bodyMedium" style={styles.entryTime}>
+                            {entry.timestamp}
                           </Text>
                         </View>
-                      )}
-                    </View>
-                    
-                    {/* Time Info */}
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 8 }}>
-                      {visit.startTime && (
-                        <Text style={{ fontSize: 12, color: '#666' }}>🕐 {visit.startTime}</Text>
-                      )}
-                      {visit.endTime && (
-                        <Text style={{ fontSize: 12, color: '#666' }}>🕐 - {visit.endTime}</Text>
-                      )}
-                      {visit.duration && (
-                        <Text style={{ fontSize: 12, color: '#666' }}>⏱️ {visit.duration} min</Text>
-                      )}
-                      {visit.estimatedCost && (
-                        <Text style={{ fontSize: 12, color: '#666' }}>💰 ${visit.estimatedCost}</Text>
-                      )}
-                      <Text style={{ fontSize: 12, color: '#666', textTransform: 'capitalize' }}>
-                        📍 {visit.status}
-                      </Text>
-                    </View>
+                      </TouchableOpacity>
+                    ))}
                   </View>
-
-                  {/* Place Details */}
-                  {visit.place && (
-                    <View style={{ padding: 12 }}>
-                      {visit.place.description && (
-                        <Text style={{ fontSize: 14, marginBottom: 8, color: '#333' }}>
-                          {visit.place.description}
-                        </Text>
-                      )}
-                      
-                      {/* Place Info Grid */}
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-                        {visit.place.address && (
-                          <View style={{ backgroundColor: '#e3f2fd', padding: 6, borderRadius: 4, flex: 1, minWidth: '45%' }}>
-                            <Text style={{ fontSize: 12, color: '#666' }}>📍 Address</Text>
-                            <Text style={{ fontSize: 12, fontWeight: 'bold' }}>{visit.place.address}</Text>
-                          </View>
-                        )}
-                        {visit.place.openingHours && (
-                          <View style={{ backgroundColor: '#e8f5e8', padding: 6, borderRadius: 4, flex: 1, minWidth: '45%' }}>
-                            <Text style={{ fontSize: 12, color: '#666' }}>🕒 Hours</Text>
-                            <Text style={{ fontSize: 12, fontWeight: 'bold' }}>{visit.place.openingHours}</Text>
-                          </View>
-                        )}
-                        {visit.place.phone && (
-                          <View style={{ backgroundColor: '#fff3e0', padding: 6, borderRadius: 4, flex: 1, minWidth: '45%' }}>
-                            <Text style={{ fontSize: 12, color: '#666' }}>📞 Phone</Text>
-                            <Text style={{ fontSize: 12, fontWeight: 'bold' }}>{visit.place.phone}</Text>
-                          </View>
-                        )}
-                        {visit.place.priceLevel && (
-                          <View style={{ backgroundColor: '#f3e5f5', padding: 6, borderRadius: 4, flex: 1, minWidth: '45%' }}>
-                            <Text style={{ fontSize: 12, color: '#666' }}>💲 Price</Text>
-                            <Text style={{ fontSize: 12, fontWeight: 'bold' }}>{visit.place.priceLevel}</Text>
-                          </View>
-                        )}
-                        {visit.place.rating && (
-                          <View style={{ backgroundColor: '#fff8e1', padding: 6, borderRadius: 4, flex: 1, minWidth: '45%' }}>
-                            <Text style={{ fontSize: 12, color: '#666' }}>⭐ Rating</Text>
-                            <Text style={{ fontSize: 12, fontWeight: 'bold' }}>{visit.place.rating}/5</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      {/* Links */}
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                        {visit.place?.website && (
-                          <TouchableOpacity
-                            onPress={() => handleLinkPress(visit.place!.website!)}
-                            style={{ backgroundColor: '#2196f3', padding: 8, borderRadius: 6, flex: 1, minWidth: '45%' }}
-                          >
-                            <Text style={{ color: 'white', fontSize: 12, textAlign: 'center', fontWeight: 'bold' }}>
-                              🌐 Website
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                        {visit.place?.googleMapsUrl && (
-                          <TouchableOpacity
-                            onPress={() => handleLinkPress(visit.place!.googleMapsUrl!)}
-                            style={{ backgroundColor: '#4CAF50', padding: 8, borderRadius: 6, flex: 1, minWidth: '45%' }}
-                          >
-                            <Text style={{ color: 'white', fontSize: 12, textAlign: 'center', fontWeight: 'bold' }}>
-                              🗺️ Maps
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-
-                      {/* Visit Notes */}
-                      {visit.notes && (
-                        <View style={{ backgroundColor: '#fff3cd', padding: 8, borderRadius: 6, marginTop: 8 }}>
-                          <Text style={{ fontSize: 12, fontWeight: 'bold', marginBottom: 2 }}>Visit Notes:</Text>
-                          <Text style={{ fontSize: 12 }}>{visit.notes}</Text>
-                        </View>
-                      )}
-
-                      {/* Place Tags */}
-                      {visit.place.tags && visit.place.tags.length > 0 && (
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 4 }}>
-                          {visit.place.tags.map((tag, tagIndex) => (
-                            <View key={tagIndex} style={{ backgroundColor: '#e0e0e0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 }}>
-                              <Text style={{ fontSize: 10, color: '#666' }}>{tag}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      )}
-                    </View>
-                  )}
                 </View>
-              ))}
-          </View>
-        ) : (
-          <View style={{ backgroundColor: '#f5f5f5', padding: 16, borderRadius: 8, alignItems: 'center' }}>
-            <Text style={{ color: '#666', fontStyle: 'italic' }}>No visits planned for this day</Text>
-          </View>
-        )}
-
-        {/* Transportation */}
-        {day.transportation && day.transportation.length > 0 && (
-          <View style={{ marginTop: 16 }}>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 12 }}>Transportation</Text>
-            {day.transportation.map((transport, index) => (
-              <View key={index} style={{ backgroundColor: '#e3f2fd', padding: 12, borderRadius: 8, marginBottom: 8 }}>
-                <Text style={{ fontSize: 14, fontWeight: 'bold', textTransform: 'capitalize' }}>
-                  🚗 {transport.type.replace('_', ' ')}
-                </Text>
-                {transport.fromPlace && transport.toPlace && (
-                  <Text style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
-                    From: {transport.fromPlace} → To: {transport.toPlace}
-                  </Text>
-                )}
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, gap: 8 }}>
-                  {transport.duration && (
-                    <Text style={{ fontSize: 12, color: '#666' }}>⏱️ {transport.duration} min</Text>
-                  )}
-                  {transport.distance && (
-                    <Text style={{ fontSize: 12, color: '#666' }}>📏 {transport.distance} km</Text>
-                  )}
-                  {transport.cost && (
-                    <Text style={{ fontSize: 12, color: '#666' }}>💰 ${transport.cost}</Text>
-                  )}
-                </View>
-                {transport.notes && (
-                  <Text style={{ fontSize: 12, marginTop: 4, fontStyle: 'italic' }}>{transport.notes}</Text>
-                )}
-                {transport.bookingUrl && (
-                  <TouchableOpacity
-                    onPress={() => handleLinkPress(transport.bookingUrl!)}
-                    style={{ backgroundColor: '#1976d2', padding: 6, borderRadius: 4, marginTop: 8, alignSelf: 'flex-start' }}
-                  >
-                    <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Book Transportation</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
+              );
+            })
+          )}
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
-function getPlaceTypeColor(placeType?: string): string {
-  const colors: Record<string, string> = {
-    restaurant: '#FF6B6B',
-    hotel: '#4ECDC4',
-    attraction: '#45B7D1',
-    museum: '#96CEB4',
-    park: '#FFEAA7',
-    shopping: '#DDA0DD',
-    nightlife: '#FF7675',
-    transport: '#74B9FF',
-    activity: '#00B894',
-    landmark: '#FDCB6E',
-    other: '#B2BEC3'
-  };
-  return colors[placeType || 'other'] || colors.other;
-}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  }, headerTitle: {
+    color: '#111827',
+    fontWeight: 'bold',
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  loadingText: {
+    color: '#111827',
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 48,
+    paddingBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    padding: 24,
+    gap: 32,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: 16,
+  },
+  emptyTitle: {
+    color: '#111827',
+    textAlign: 'center',
+  },
+  emptyDescription: {
+    color: '#6b7280',
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  daySection: {
+    gap: 16,
+  },
+  dayHeader: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#000000',
+    marginBottom: 8,
+  },
+  dayEntries: {
+    gap: 20,
+  },
+  entryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  entryContent: {
+    flex: 1,
+    gap: 4,
+  },
+  entryTitle: {
+    color: '#111827',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  entryTime: {
+    color: '#6b7280',
+    fontSize: 14,
+  },
+});
